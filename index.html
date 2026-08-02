@@ -378,20 +378,7 @@ const store = {
    2. DATA
    ============================================================ */
 const HUES = [[262,190],[196,262],[340,262],[160,196],[220,300],[30,340]];
-const seed = [
-  ["Night Drive Through Shinjuku","Aya Tanaka","aya","Film","4:12","Handheld, one take, no edits. Just the city at 2am."],
-  ["How Directors Frame Silence","Marco Lang","marco","Learning","11:47","Six scenes where nothing is said and everything lands."],
-  ["Every Ending, Ranked Honestly","Priya Nair","priya","Series","18:03","Yes, including the one everybody defends."],
-  ["Analog Synths in a Small Room","Kofi Mensah","kofi","Music","7:25","Three machines, one take, zero plugins."],
-  ["The Long Take Nobody Talks About","Elena Vos","elena","Film","9:16","Four uninterrupted minutes that changed how I edit."],
-  ["Speedrunning a Game I'm Bad At","Danny Reyes","danny","Gaming","22:41","I lose. Repeatedly. It's still fun."],
-  ["Colour Grading on a Laptop","Aya Tanaka","aya","Learning","14:09","No calibrated monitor, no excuse."],
-  ["Openings That Earn Their Length","Priya Nair","priya","Anime","12:33","Ninety seconds is a long time. Some of these deserve it."],
-  ["Field Recording: Rain on Metal","Kofi Mensah","kofi","Music","31:00","Put it on and do something else."],
-  ["Rewatching a Film I Hated at 19","Elena Vos","elena","Film","16:52","I was wrong, but not for the reason you'd guess."],
-  ["Building a Set in a Bedroom","Marco Lang","marco","Learning","8:38","Total spend: less than a new lens cap."],
-  ["The Episode That Broke the Show","Danny Reyes","danny","Series","19:27","Everything after it is a different programme."]
-];
+
 let videos = store.get('cv_videos', null);
 if(!videos){
   videos = seed.map((s,i)=>({
