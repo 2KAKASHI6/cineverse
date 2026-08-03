@@ -324,8 +324,8 @@ footer{border-top:1px solid var(--line);padding:38px 0;color:var(--muted);font-s
 
   <div class="wrap">
     <footer>
-      <span>CineVerse — front end prototype. Data lives in this browser only.</span>
-      <span>Built as a starting point, not a finished platform.</span>
+      <span>CineVerse — a private library for invited members.</span>
+      <span>Videos stored on Cloudflare R2. Accounts by Supabase.</span>
     </footer>
   </div>
 </div>
@@ -334,7 +334,7 @@ footer{border-top:1px solid var(--line);padding:38px 0;color:var(--muted);font-s
 <div class="modal" id="uploadModal">
   <div class="sheet">
     <h3>Upload a video</h3>
-    <p>Files stay on this device for the session. Connecting real storage is the next step.</p>
+    <p>Your file is stored properly and everyone signed in will see it.</p>
     <div class="drop" id="drop">
       <b>Drop a video here, or choose a file</b>
       <small>MP4 or WebM</small>
@@ -378,18 +378,7 @@ const store = {
    2. DATA
    ============================================================ */
 const HUES = [[262,190],[196,262],[340,262],[160,196],[220,300],[30,340]];
-
-let videos = store.get('cv_videos', null);
-if(!videos){
-  videos = seed.map((s,i)=>({
-    id:'v'+i, title:s[0], creator:s[1], handle:s[2], cat:s[3], dur:s[4], desc:s[5],
-    views:Math.floor(Math.random()*84000)+1200,
-    days:Math.floor(Math.random()*40)+1,
-    hue:HUES[i%HUES.length], src:null,
-    tags:[s[3].toLowerCase(), ['nofilter','longform','breakdown','archive','latenight'][i%5]]
-  }));
-  store.set('cv_videos', videos);
-}
+let videos = [];
 let likes = store.get('cv_likes', []);
 let saves = store.get('cv_saves', []);
 let comments = store.get('cv_comments', {});
@@ -421,7 +410,7 @@ function cardHTML(v){
       <div class="av" style="background:${avatarBg(v.creator)}">${initials(v.creator)}</div>
       <div>
         <h3>${v.title}</h3>
-        <small>${v.creator} · ${fmt(v.views)} views · ${v.days}d ago</small>
+        <small>${v.creator} · ${v.days === 0 ? 'today' : v.days + 'd ago'}</small>
       </div>
     </div>
   </article>`;
@@ -436,8 +425,7 @@ function gridHTML(list, emptyMsg){
    4. VIEWS
    ============================================================ */
 function viewHome(){
-  const trending = [...videos].sort((a,b)=>b.views-a.views).slice(0,8);
-  const fresh = [...videos].sort((a,b)=>a.days-b.days).slice(0,4);
+  const trending = videos.slice(0,8);
   return `
   <div class="wrap">
     <div class="hero">
@@ -451,21 +439,16 @@ function viewHome(){
       <div class="deck">${videos.slice(0,5).map(v=>`<div class="tile" style="background:${grad(v.hue)}"></div>`).join('')}</div>
       <div class="stats">
         <div class="stat"><b>${videos.length}</b><span>Videos in the library</span></div>
-        <div class="stat"><b>6</b><span>Creators</span></div>
-        <div class="stat"><b>${fmt(videos.reduce((s,v)=>s+v.views,0))}</b><span>Total views</span></div>
+        <div class="stat"><b>${new Set(videos.map(v=>v.creator)).size}</b><span>People who uploaded</span></div>
+        <div class="stat"><b>${videos.filter(v=>v.days<7).length}</b><span>Added this week</span></div>
         <div class="stat"><b>${likes.length}</b><span>Things you liked</span></div>
       </div>
     </div>
 
     <section>
-      <div class="head"><div><h2>Trending this week</h2><p>Most watched across the community</p></div>
+      <div class="head"><div><h2>Recently added</h2><p>Newest first</p></div>
         <button class="btn btn-ghost" data-go="#/browse">See all</button></div>
-      ${gridHTML(trending)}
-    </section>
-
-    <section>
-      <div class="head"><div><h2>Just uploaded</h2><p>The newest additions to the library</p></div></div>
-      ${gridHTML(fresh)}
+      ${gridHTML(trending,'Upload the first video and it appears here for everyone.')}
     </section>
 
     <section>
@@ -573,7 +556,7 @@ function viewWatch(id){
           <button class="pill" data-share="1">↗ Share</button>
         </div>
         <div class="desc">
-          <div class="m">${fmt(v.views)} views · ${v.days} days ago · ${v.cat}</div>
+          <div class="m">Added ${v.days === 0 ? 'today' : v.days + ' days ago'} · ${v.cat}</div>
           ${v.desc}
           <div class="tagrow">${v.tags.map(t=>`<span class="tag">#${t}</span>`).join('')}</div>
         </div>
@@ -595,7 +578,7 @@ function viewWatch(id){
         <h4>Up next</h4>
         ${next.map(n=>`<div class="mini" data-go="#/watch/${n.id}">
           <div class="t" style="background:${grad(n.hue)}"></div>
-          <div><h5>${n.title}</h5><small>${n.creator}</small><small>${fmt(n.views)} views</small></div>
+          <div><h5>${n.title}</h5><small>${n.creator}</small></div>
         </div>`).join('')}
       </aside>
     </div>
@@ -761,36 +744,53 @@ function takeFile(f){
   if(!t.value) t.value = f.name.replace(/\.[^.]+$/,'');
 }
 
-document.getElementById('doUpload').onclick = ()=>{
+document.getElementById('doUpload').onclick = async ()=>{
   const title = document.getElementById('uTitle').value.trim();
   if(!picked) return toast('Choose a video file first');
   if(!title)  return toast('Give the video a title');
+  if(!me)     return toast('Sign in first');
 
+  const btn = document.getElementById('doUpload');
+  btn.disabled = true; btn.textContent = 'Uploading…';
   prog.classList.add('on');
-  let p = 0;
-  const tick = setInterval(()=>{
-    p = Math.min(100, p + 9 + Math.random()*14);
-    prog.firstElementChild.style.width = p+'%';
-    if(p >= 100){
-      clearInterval(tick);
-      const v = {
-        id:'u'+Date.now(), title,
-        creator:'You', handle:'you',
-        cat:document.getElementById('uCat').value,
-        desc:document.getElementById('uDesc').value.trim() || 'No description.',
-        dur:'—', views:0, days:0,
-        hue:HUES[Math.floor(Math.random()*HUES.length)],
-        src:URL.createObjectURL(picked),
-        tags:[document.getElementById('uCat').value.toLowerCase(), document.getElementById('uVis').value.toLowerCase()]
-      };
-      videos.unshift(v);
-      // object URLs die on refresh, so only metadata is stored
-      store.set('cv_videos', videos.map(x => x.src && x.src.startsWith('blob:') ? {...x, src:null} : x));
-      closeUpload();
-      location.hash = '#/watch/'+v.id;
-      toast('Published — plays until you refresh');
-    }
-  }, 160);
+  prog.firstElementChild.style.width = '12%';
+
+  try{
+    const { data:{ session } } = await sb.auth.getSession();
+
+    const res = await fetch(WORKER_URL, {
+      method:'POST',
+      headers:{
+        'Authorization':'Bearer ' + session.access_token,
+        'Content-Type': picked.type || 'video/mp4',
+        'X-File-Name': picked.name
+      },
+      body: picked
+    });
+    if(!res.ok) throw new Error(await res.text() || 'Storage refused the file');
+    const { key } = await res.json();
+    prog.firstElementChild.style.width = '75%';
+
+    const { error } = await sb.from('videos').insert({
+      owner: me.id,
+      title,
+      description: document.getElementById('uDesc').value.trim() || null,
+      category: document.getElementById('uCat').value,
+      file_key: key
+    });
+    if(error) throw error;
+
+    prog.firstElementChild.style.width = '100%';
+    closeUpload();
+    await loadVideos();
+    location.hash = '#/browse';
+    toast('Published');
+  }catch(err){
+    toast(err.message || 'Upload failed');
+  }finally{
+    btn.disabled = false; btn.textContent = 'Publish';
+    prog.classList.remove('on'); prog.firstElementChild.style.width = '0';
+  }
 };
 
 window.cvToast = toast;
@@ -804,6 +804,38 @@ const SUPABASE_KEY = "sb_publishable_eXQEm5cmgipPuJXq9U9w7Q_aM07lpbv";
 // Set to null for open signup, or a string to require a code:
 //   const INVITE_CODE = "cineverse2026";
 const INVITE_CODE = null;
+
+// Where video files live, and the Worker that accepts uploads
+const R2_PUBLIC   = "https://pub-8864a00e94d74e8ea226a45ea978fb41.r2.dev";
+const WORKER_URL  = "https://cineverse-upload.abdumalikovsanoolloh.workers.dev";
+
+async function loadVideos(){
+  const [{ data:rows, error }, { data:people }] = await Promise.all([
+    sb.from('videos').select('*').order('created_at', { ascending:false }),
+    sb.from('profiles').select('id,display_name')
+  ]);
+  if(error){ toast('Could not reach the library'); return; }
+
+  const nameOf = Object.fromEntries((people||[]).map(p=>[p.id, p.display_name || 'Member']));
+  videos = (rows||[]).map(r=>{
+    const days = Math.max(0, Math.floor((Date.now() - new Date(r.created_at)) / 86400000));
+    const mine = r.owner === me?.id;
+    const who  = mine ? 'You' : (nameOf[r.owner] || 'Member');
+    return {
+      id: r.id,
+      title: r.title,
+      desc: r.description || 'No description.',
+      cat: r.category || 'Film',
+      creator: who,
+      handle: mine ? 'you' : who.toLowerCase().replace(/\s+/g,''),
+      dur: '—', days,
+      hue: HUES[(r.title.charCodeAt(0) || 0) % HUES.length],
+      src: R2_PUBLIC + '/' + r.file_key,
+      tags: [(r.category || 'film').toLowerCase()]
+    };
+  });
+  render();
+}
 
 const configured = !SUPABASE_URL.startsWith("PASTE");
 const sb = configured ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
@@ -878,7 +910,7 @@ if(configured){
     gate.classList.toggle('on', !me);
     document.body.style.overflow = me ? '' : 'hidden';
     paintAccount();
-    if(me) render();
+    if(me) loadVideos(); else { videos = []; render(); }
   });
   sb.auth.getSession().then(({ data })=>{
     if(!data.session){ gate.classList.add('on'); document.body.style.overflow = 'hidden'; }
